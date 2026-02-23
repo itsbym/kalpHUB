@@ -10,6 +10,7 @@ local CoreGui = game:GetService("CoreGui")
 local TweenService = game:GetService("TweenService")
 local VirtualInputManager = game:GetService("VirtualInputManager")
 local HttpService = game:GetService("HttpService")
+local GuiService = game:GetService("GuiService")
 
 --[ Local Player Setup ]--
 local LocalPlayer = Players.LocalPlayer
@@ -70,14 +71,25 @@ getgenv().AimbotESPSettings = {
         Triggerbot = {
             Enabled = false,
             Delay = 0,
+            DelayRandomization = 0,
             Keybind = Enum.UserInputType.MouseButton3,
             RequireKeybind = false,
-            SpoofMethod = "firesignal",
+            SpoofMethod = "mouse1click",
             KeybindMode = "Hold",
             IgnoreWall = false,
-            MultiRay = true,
-            RaySpread = 3,
+            MultiRay = {
+                Enabled = true,
+                Pattern = "Cross",
+                Spread = 3,
+                RandomCount = 4,
+            },
             TeamCheck = true,
+            Precision = {
+                TargetMode = "Loose",
+                TargetPart = "Head",
+                Tolerance = 2,
+                ExpansionMultiplier = 1.0,
+            },
         },
         SilentAim = {
             Enabled = false,
@@ -97,6 +109,39 @@ getgenv().AimbotESPSettings = {
         WallCheck = true,
         TeamCheck = false,
         AliveCheck = true,
+        AdvancedWallCheck = {
+            Enabled = false,
+            LowEndMode = false,
+            MultiPointCheck = {
+                Enabled = true,
+                CheckPoints = {"Head", "UpperTorso", "LowerTorso"},
+                RequireAny = true,
+            },
+            PenetrableCheck = {
+                Enabled = true,
+                CheckCanCollide = true,
+                CheckTransparency = true,
+                TransparencyThreshold = 1,
+            },
+            VisiblePartsCount = {
+                Enabled = true,
+                MinVisibleParts = 2,
+                MinVisibilityPercentage = 30,
+                RequireEssential = true,
+                EssentialParts = {"Head", "UpperTorso"},
+            },
+        },
+        CustomTargets = {
+            Enabled = false,
+            Mode = "Append",
+            Presets = {
+                Head = "",
+                Body = "",
+                Arms = "",
+                Legs = "",
+            },
+            Custom = {},
+        },
     },
     ESP = {
         Enabled = false,
@@ -526,18 +571,158 @@ PredSection:Toggle({
 })
 
 PredSection:Toggle({
-    Title = "Multi-Ray (Gap Detection)",
-    Default = C.Aimbot.Triggerbot.MultiRay,
-    Callback = function(v)
-        C.Aimbot.Triggerbot.MultiRay = v
-    end,
-})
-
-PredSection:Toggle({
     Title = "Team Check",
     Default = C.Aimbot.Triggerbot.TeamCheck,
     Callback = function(v)
         C.Aimbot.Triggerbot.TeamCheck = v
+    end,
+})
+
+local PrecisionSection = AimbotTab:Section({ Title = "Triggerbot Precision" })
+
+PrecisionSection:Dropdown({
+    Title = "Target Mode",
+    Values = { "Strict", "Forgiving", "Loose" },
+    Value = C.Aimbot.Triggerbot.Precision.TargetMode,
+    Callback = function(v)
+        C.Aimbot.Triggerbot.Precision.TargetMode = v
+    end,
+})
+
+PrecisionSection:Dropdown({
+    Title = "Target Part",
+    Values = { "Head", "Body", "Any", "Closest" },
+    Value = C.Aimbot.Triggerbot.Precision.TargetPart,
+    Callback = function(v)
+        C.Aimbot.Triggerbot.Precision.TargetPart = v
+    end,
+})
+
+PrecisionSection:Slider({
+    Title = "Tolerance (pixels)",
+    Value = { Min = 0, Max = 20, Default = C.Aimbot.Triggerbot.Precision.Tolerance },
+    Callback = function(v)
+        C.Aimbot.Triggerbot.Precision.Tolerance = v
+    end,
+})
+
+PrecisionSection:Slider({
+    Title = "Hitbox Expansion (multiplier)",
+    Value = { Min = 10, Max = 300, Default = math.floor(C.Aimbot.Triggerbot.Precision.ExpansionMultiplier * 100) },
+    Callback = function(v)
+        C.Aimbot.Triggerbot.Precision.ExpansionMultiplier = v / 100
+    end,
+})
+
+PrecisionSection:Toggle({
+    Title = "Enable Multi-Ray Pattern",
+    Default = C.Aimbot.Triggerbot.MultiRay.Enabled,
+    Callback = function(v)
+        C.Aimbot.Triggerbot.MultiRay.Enabled = v
+    end,
+})
+
+PrecisionSection:Dropdown({
+    Title = "Ray Pattern",
+    Values = { "Single", "Cross", "Grid", "Random" },
+    Value = C.Aimbot.Triggerbot.MultiRay.Pattern,
+    Callback = function(v)
+        C.Aimbot.Triggerbot.MultiRay.Pattern = v
+    end,
+})
+
+PrecisionSection:Slider({
+    Title = "Ray Spread (pixels)",
+    Value = { Min = 1, Max = 10, Default = C.Aimbot.Triggerbot.MultiRay.Spread },
+    Callback = function(v)
+        C.Aimbot.Triggerbot.MultiRay.Spread = v
+    end,
+})
+
+PrecisionSection:Slider({
+    Title = "Random Ray Count",
+    Value = { Min = 2, Max = 10, Default = C.Aimbot.Triggerbot.MultiRay.RandomCount },
+    Callback = function(v)
+        C.Aimbot.Triggerbot.MultiRay.RandomCount = v
+    end,
+})
+
+PrecisionSection:Slider({
+    Title = "Delay Randomization (±ms)",
+    Value = { Min = 0, Max = 100, Default = C.Aimbot.Triggerbot.DelayRandomization * 1000 },
+    Callback = function(v)
+        C.Aimbot.Triggerbot.DelayRandomization = v / 1000
+    end,
+})
+
+local TriggerbotPresetsSection = AimbotTab:Section({ Title = "Triggerbot Quick Presets" })
+
+TriggerbotPresetsSection:Button({
+    Title = "Legit",
+    Callback = function()
+        C.Aimbot.Triggerbot.Precision.Tolerance = 1
+        C.Aimbot.Triggerbot.Precision.ExpansionMultiplier = 1.0
+        C.Aimbot.Triggerbot.MultiRay.Enabled = false
+        C.Aimbot.Triggerbot.MultiRay.Pattern = "Single"
+        C.Aimbot.Triggerbot.Delay = 0.080
+        C.Aimbot.Triggerbot.DelayRandomization = 0.030
+        WindUI:Notify({ Title = "Triggerbot Preset", Content = "Legit settings applied." })
+    end,
+})
+
+TriggerbotPresetsSection:Button({
+    Title = "Semi-Legit",
+    Callback = function()
+        C.Aimbot.Triggerbot.Precision.Tolerance = 2
+        C.Aimbot.Triggerbot.Precision.ExpansionMultiplier = 1.3
+        C.Aimbot.Triggerbot.MultiRay.Enabled = true
+        C.Aimbot.Triggerbot.MultiRay.Pattern = "Cross"
+        C.Aimbot.Triggerbot.MultiRay.Spread = 2
+        C.Aimbot.Triggerbot.Delay = 0.050
+        C.Aimbot.Triggerbot.DelayRandomization = 0.020
+        WindUI:Notify({ Title = "Triggerbot Preset", Content = "Semi-Legit settings applied." })
+    end,
+})
+
+TriggerbotPresetsSection:Button({
+    Title = "Balanced",
+    Callback = function()
+        C.Aimbot.Triggerbot.Precision.Tolerance = 3
+        C.Aimbot.Triggerbot.Precision.ExpansionMultiplier = 1.5
+        C.Aimbot.Triggerbot.MultiRay.Enabled = true
+        C.Aimbot.Triggerbot.MultiRay.Pattern = "Cross"
+        C.Aimbot.Triggerbot.MultiRay.Spread = 3
+        C.Aimbot.Triggerbot.Delay = 0.030
+        C.Aimbot.Triggerbot.DelayRandomization = 0.015
+        WindUI:Notify({ Title = "Triggerbot Preset", Content = "Balanced settings applied." })
+    end,
+})
+
+TriggerbotPresetsSection:Button({
+    Title = "Effective",
+    Callback = function()
+        C.Aimbot.Triggerbot.Precision.Tolerance = 4
+        C.Aimbot.Triggerbot.Precision.ExpansionMultiplier = 1.8
+        C.Aimbot.Triggerbot.MultiRay.Enabled = true
+        C.Aimbot.Triggerbot.MultiRay.Pattern = "Grid"
+        C.Aimbot.Triggerbot.MultiRay.Spread = 4
+        C.Aimbot.Triggerbot.Delay = 0.010
+        C.Aimbot.Triggerbot.DelayRandomization = 0.010
+        WindUI:Notify({ Title = "Triggerbot Preset", Content = "Effective settings applied." })
+    end,
+})
+
+TriggerbotPresetsSection:Button({
+    Title = "Rage",
+    Callback = function()
+        C.Aimbot.Triggerbot.Precision.Tolerance = 6
+        C.Aimbot.Triggerbot.Precision.ExpansionMultiplier = 2.5
+        C.Aimbot.Triggerbot.MultiRay.Enabled = true
+        C.Aimbot.Triggerbot.MultiRay.Pattern = "Grid"
+        C.Aimbot.Triggerbot.MultiRay.Spread = 6
+        C.Aimbot.Triggerbot.Delay = 0
+        C.Aimbot.Triggerbot.DelayRandomization = 0
+        WindUI:Notify({ Title = "Triggerbot Preset", Content = "Rage settings applied." })
     end,
 })
 
@@ -958,6 +1143,125 @@ ColorsSection:Colorpicker({
 --   SETTINGS TAB UI   --
 --=====================--
 
+local GlobalChecksSection = SettingsTab:Section({ Title = "Global Checks" })
+
+GlobalChecksSection:Toggle({
+    Title = "Global Team Check",
+    Default = C.Aimbot.TeamCheck,
+    Callback = function(v)
+        C.Aimbot.TeamCheck = v
+        C.ESP.TeamCheck = v
+    end,
+})
+
+GlobalChecksSection:Toggle({
+    Title = "Global Alive Check",
+    Default = C.Aimbot.AliveCheck,
+    Callback = function(v)
+        C.Aimbot.AliveCheck = v
+        C.ESP.AliveCheck = v
+    end,
+})
+
+GlobalChecksSection:Toggle({
+    Title = "Global Wall Check",
+    Default = C.Aimbot.WallCheck,
+    Callback = function(v)
+        C.Aimbot.WallCheck = v
+        C.ESP.WallCheck = v
+    end,
+})
+
+local AdvancedWallSection = SettingsTab:Section({ Title = "Advanced Wall Check" })
+
+AdvancedWallSection:Toggle({
+    Title = "Enable Advanced Wall Check",
+    Default = C.Aimbot.AdvancedWallCheck.Enabled,
+    Callback = function(v)
+        C.Aimbot.AdvancedWallCheck.Enabled = v
+    end,
+})
+
+AdvancedWallSection:Toggle({
+    Title = "Low-End Mode (Disable Heavy Checks)",
+    Default = C.Aimbot.AdvancedWallCheck.LowEndMode,
+    Callback = function(v)
+        C.Aimbot.AdvancedWallCheck.LowEndMode = v
+    end,
+})
+
+AdvancedWallSection:Toggle({
+    Title = "Multi-Point Visibility Check",
+    Default = C.Aimbot.AdvancedWallCheck.MultiPointCheck.Enabled,
+    Callback = function(v)
+        C.Aimbot.AdvancedWallCheck.MultiPointCheck.Enabled = v
+    end,
+})
+
+AdvancedWallSection:Toggle({
+    Title = "Penetrable Object Detection",
+    Default = C.Aimbot.AdvancedWallCheck.PenetrableCheck.Enabled,
+    Callback = function(v)
+        C.Aimbot.AdvancedWallCheck.PenetrableCheck.Enabled = v
+    end,
+})
+
+AdvancedWallSection:Toggle({
+    Title = "Check CanCollide",
+    Default = C.Aimbot.AdvancedWallCheck.PenetrableCheck.CheckCanCollide,
+    Callback = function(v)
+        C.Aimbot.AdvancedWallCheck.PenetrableCheck.CheckCanCollide = v
+    end,
+})
+
+AdvancedWallSection:Toggle({
+    Title = "Check Transparency",
+    Default = C.Aimbot.AdvancedWallCheck.PenetrableCheck.CheckTransparency,
+    Callback = function(v)
+        C.Aimbot.AdvancedWallCheck.PenetrableCheck.CheckTransparency = v
+    end,
+})
+
+AdvancedWallSection:Slider({
+    Title = "Transparency Threshold",
+    Value = { Min = 0, Max = 100, Default = math.floor(C.Aimbot.AdvancedWallCheck.PenetrableCheck.TransparencyThreshold * 100) },
+    Callback = function(v)
+        C.Aimbot.AdvancedWallCheck.PenetrableCheck.TransparencyThreshold = v / 100
+    end,
+})
+
+AdvancedWallSection:Toggle({
+    Title = "Visible Parts Count Check",
+    Default = C.Aimbot.AdvancedWallCheck.VisiblePartsCount.Enabled,
+    Callback = function(v)
+        C.Aimbot.AdvancedWallCheck.VisiblePartsCount.Enabled = v
+    end,
+})
+
+AdvancedWallSection:Slider({
+    Title = "Min Visible Parts",
+    Value = { Min = 1, Max = 10, Default = C.Aimbot.AdvancedWallCheck.VisiblePartsCount.MinVisibleParts },
+    Callback = function(v)
+        C.Aimbot.AdvancedWallCheck.VisiblePartsCount.MinVisibleParts = v
+    end,
+})
+
+AdvancedWallSection:Slider({
+    Title = "Min Visibility %",
+    Value = { Min = 10, Max = 100, Default = C.Aimbot.AdvancedWallCheck.VisiblePartsCount.MinVisibilityPercentage },
+    Callback = function(v)
+        C.Aimbot.AdvancedWallCheck.VisiblePartsCount.MinVisibilityPercentage = v
+    end,
+})
+
+AdvancedWallSection:Toggle({
+    Title = "Require Essential Part Visible",
+    Default = C.Aimbot.AdvancedWallCheck.VisiblePartsCount.RequireEssential,
+    Callback = function(v)
+        C.Aimbot.AdvancedWallCheck.VisiblePartsCount.RequireEssential = v
+    end,
+})
+
 local SettingsSection = SettingsTab:Section({ Title = "Configuration" })
 
 SettingsSection:Button({
@@ -974,44 +1278,149 @@ SettingsSection:Button({
     end,
 })
 
-local PresetsSection = SettingsTab:Section({ Title = "Presets" })
+local PresetsSection = SettingsTab:Section({ Title = "Global Presets" })
 
 PresetsSection:Button({
-    Title = "Load Legit Preset",
+    Title = "Ghost (Minimal Assist)",
     Callback = function()
-        C.Aimbot.Enabled = true
-        C.Aimbot.Method = "Camera"
-        C.Aimbot.Smoothness.Enabled = true
-        C.Aimbot.Smoothness.Value = 0.2
-        C.Aimbot.Smoothness.Humanize = true
-        C.Aimbot.Hitchance = 85
-        C.Aimbot.FOV.Radius = 100
+        C.Aimbot.Enabled = false
         C.Aimbot.SilentAim.Enabled = false
-        C.Aimbot.RCS.Enabled = true
-        C.ESP.Enabled = true
-        C.ESP.Boxes.Enabled = true
-        C.ESP.Boxes.Style = "2D"
-        C.ESP.Chams.Enabled = false
-        WindUI:Notify({ Title = "Preset Loaded", Content = "Legit configuration applied." })
+        C.Aimbot.RCS.Enabled = false
+        C.Aimbot.NoSpread.Enabled = false
+        C.Aimbot.WallCheck = true
+        C.Aimbot.TeamCheck = true
+        C.Aimbot.AliveCheck = true
+        
+        C.Aimbot.Triggerbot.Enabled = true
+        C.Aimbot.Triggerbot.Delay = 0.100
+        C.Aimbot.Triggerbot.DelayRandomization = 0.040
+        C.Aimbot.Triggerbot.Precision.Tolerance = 1
+        C.Aimbot.Triggerbot.Precision.ExpansionMultiplier = 1.0
+        C.Aimbot.Triggerbot.MultiRay.Enabled = false
+        C.Aimbot.Triggerbot.IgnoreWall = false
+        C.Aimbot.Triggerbot.TeamCheck = true
+        
+        C.ESP.Enabled = false
+        
+        WindUI:Notify({ Title = "Ghost Preset", Content = "Minimal assist, no ESP. Need real skill!" })
     end,
 })
 
 PresetsSection:Button({
-    Title = "Load Rage Preset",
+    Title = "Closet (Almost Legit)",
+    Callback = function()
+        C.Aimbot.Enabled = true
+        C.Aimbot.Method = "Camera"
+        C.Aimbot.Smoothness.Enabled = true
+        C.Aimbot.Smoothness.Value = 0.15
+        C.Aimbot.Smoothness.Humanize = true
+        C.Aimbot.Hitchance = 85
+        C.Aimbot.FOV.Radius = 80
+        C.Aimbot.WallCheck = true
+        C.Aimbot.TeamCheck = true
+        C.Aimbot.Prediction.Enabled = false
+        C.Aimbot.SilentAim.Enabled = false
+        C.Aimbot.RCS.Enabled = true
+        C.Aimbot.RageMode = false
+        
+        C.Aimbot.Triggerbot.Enabled = true
+        C.Aimbot.Triggerbot.Delay = 0.080
+        C.Aimbot.Triggerbot.DelayRandomization = 0.030
+        C.Aimbot.Triggerbot.Precision.Tolerance = 1
+        C.Aimbot.Triggerbot.Precision.ExpansionMultiplier = 1.0
+        C.Aimbot.Triggerbot.MultiRay.Enabled = false
+        C.Aimbot.Triggerbot.IgnoreWall = false
+        C.Aimbot.Triggerbot.TeamCheck = true
+        
+        C.ESP.Enabled = true
+        C.ESP.Boxes.Enabled = true
+        C.ESP.Boxes.Style = "2D"
+        C.ESP.Chams.Enabled = false
+        C.ESP.Skeleton.Enabled = false
+        C.ESP.HeadDot.Enabled = false
+        C.ESP.Tracers.Enabled = false
+        C.ESP.Arrows.Enabled = false
+        
+        WindUI:Notify({ Title = "Closet Preset", Content = "Almost legit looking settings applied." })
+    end,
+})
+
+PresetsSection:Button({
+    Title = "Rage (Obvious)",
+    Callback = function()
+        C.Aimbot.Enabled = true
+        C.Aimbot.Method = "Camera"
+        C.Aimbot.Smoothness.Enabled = false
+        C.Aimbot.Hitchance = 100
+        C.Aimbot.FOV.Radius = 500
+        C.Aimbot.WallCheck = true
+        C.Aimbot.TeamCheck = true
+        C.Aimbot.Prediction.Enabled = true
+        C.Aimbot.Prediction.VelocityCompensation = 0.165
+        C.Aimbot.SilentAim.Enabled = true
+        C.Aimbot.RCS.Enabled = false
+        C.Aimbot.RageMode = false
+        
+        C.Aimbot.Triggerbot.Enabled = true
+        C.Aimbot.Triggerbot.Delay = 0.010
+        C.Aimbot.Triggerbot.DelayRandomization = 0.010
+        C.Aimbot.Triggerbot.Precision.Tolerance = 4
+        C.Aimbot.Triggerbot.Precision.ExpansionMultiplier = 1.8
+        C.Aimbot.Triggerbot.MultiRay.Enabled = true
+        C.Aimbot.Triggerbot.MultiRay.Pattern = "Grid"
+        C.Aimbot.Triggerbot.MultiRay.Spread = 4
+        C.Aimbot.Triggerbot.IgnoreWall = false
+        C.Aimbot.Triggerbot.TeamCheck = true
+        
+        C.ESP.Enabled = true
+        C.ESP.Boxes.Enabled = true
+        C.ESP.Boxes.Style = "Corner"
+        C.ESP.Chams.Enabled = true
+        C.ESP.Skeleton.Enabled = true
+        C.ESP.HeadDot.Enabled = true
+        
+        WindUI:Notify({ Title = "Rage Preset", Content = "Obvious but functional settings applied." })
+    end,
+})
+
+PresetsSection:Button({
+    Title = "Brutal (Maximum)",
     Callback = function()
         C.Aimbot.Enabled = true
         C.Aimbot.Method = "Camera"
         C.Aimbot.Smoothness.Enabled = false
         C.Aimbot.Hitchance = 100
         C.Aimbot.FOV.Radius = 800
+        C.Aimbot.WallCheck = false
+        C.Aimbot.TeamCheck = false
+        C.Aimbot.RageMode = true
+        C.Aimbot.Prediction.Enabled = true
+        C.Aimbot.Prediction.VelocityCompensation = 0.2
         C.Aimbot.SilentAim.Enabled = true
         C.Aimbot.RCS.Enabled = false
-        C.Aimbot.Prediction.Enabled = true
+        C.Aimbot.NoSpread.Enabled = true
+        
+        C.Aimbot.Triggerbot.Enabled = true
+        C.Aimbot.Triggerbot.Delay = 0
+        C.Aimbot.Triggerbot.DelayRandomization = 0
+        C.Aimbot.Triggerbot.IgnoreWall = true
+        C.Aimbot.Triggerbot.Precision.Tolerance = 6
+        C.Aimbot.Triggerbot.Precision.ExpansionMultiplier = 2.5
+        C.Aimbot.Triggerbot.MultiRay.Enabled = true
+        C.Aimbot.Triggerbot.MultiRay.Pattern = "Grid"
+        C.Aimbot.Triggerbot.MultiRay.Spread = 6
+        C.Aimbot.Triggerbot.TeamCheck = false
+        
         C.ESP.Enabled = true
         C.ESP.Boxes.Enabled = true
-        C.ESP.Boxes.Style = "Corner"
+        C.ESP.Boxes.Style = "2D"
         C.ESP.Chams.Enabled = true
-        WindUI:Notify({ Title = "Preset Loaded", Content = "Rage configuration applied." })
+        C.ESP.Skeleton.Enabled = true
+        C.ESP.HeadDot.Enabled = true
+        C.ESP.Tracers.Enabled = true
+        C.ESP.Arrows.Enabled = true
+        
+        WindUI:Notify({ Title = "Brutal Preset", Content = "Maximum advantage settings applied." })
     end,
 })
 
@@ -1019,30 +1428,42 @@ local KeybindsSection = SettingsTab:Section({ Title = "Keybinds" })
 
 KeybindsSection:Keybind({
     Title = "Aimbot Activation",
-    Value = "MouseButton2",
+    Value = "MouseRight",
     Callback = function(k)
-        if k and k ~= "" then
-            local key = tostring(k)
-            if Enum.UserInputType[key] then
-                C.Aimbot.Keybind = Enum.UserInputType[key]
-            elseif Enum.KeyCode[key] then
-                C.Aimbot.Keybind = Enum.KeyCode[key]
-            end
+        if not k or k == "" then return end
+        
+        local key = tostring(k)
+        local mouseMap = {
+            ["MouseLeft"] = Enum.UserInputType.MouseButton1,
+            ["MouseRight"] = Enum.UserInputType.MouseButton2,
+            ["MouseMiddle"] = Enum.UserInputType.MouseButton3,
+        }
+        
+        if mouseMap[key] then
+            C.Aimbot.Keybind = mouseMap[key]
+        elseif Enum.KeyCode[key] then
+            C.Aimbot.Keybind = Enum.KeyCode[key]
         end
     end,
 })
 
 KeybindsSection:Keybind({
     Title = "Triggerbot Key",
-    Value = "MouseButton3",
+    Value = "MouseMiddle",
     Callback = function(k)
-        if k and k ~= "" then
-            local key = tostring(k)
-            if Enum.UserInputType[key] then
-                C.Aimbot.Triggerbot.Keybind = Enum.UserInputType[key]
-            elseif Enum.KeyCode[key] then
-                C.Aimbot.Triggerbot.Keybind = Enum.KeyCode[key]
-            end
+        if not k or k == "" then return end
+        
+        local key = tostring(k)
+        local mouseMap = {
+            ["MouseLeft"] = Enum.UserInputType.MouseButton1,
+            ["MouseRight"] = Enum.UserInputType.MouseButton2,
+            ["MouseMiddle"] = Enum.UserInputType.MouseButton3,
+        }
+        
+        if mouseMap[key] then
+            C.Aimbot.Triggerbot.Keybind = mouseMap[key]
+        elseif Enum.KeyCode[key] then
+            C.Aimbot.Triggerbot.Keybind = Enum.KeyCode[key]
         end
     end,
 })
@@ -1065,6 +1486,65 @@ KeybindsSection:Keybind({
             C.GUIToggleKey = Enum.KeyCode[k]
             Window:SetToggleKey(Enum.KeyCode[k])
         end
+    end,
+})
+
+local CustomTargetsSection = SettingsTab:Section({ Title = "Custom Targets" })
+
+CustomTargetsSection:Toggle({
+    Title = "Enable Custom Targets",
+    Default = C.Aimbot.CustomTargets.Enabled,
+    Callback = function(v)
+        C.Aimbot.CustomTargets.Enabled = v
+    end,
+})
+
+CustomTargetsSection:Dropdown({
+    Title = "Mode",
+    Values = { "Append", "Replace" },
+    Value = C.Aimbot.CustomTargets.Mode,
+    Callback = function(v)
+        C.Aimbot.CustomTargets.Mode = v
+    end,
+})
+
+CustomTargetsSection:Input({
+    Title = "Head (comma-separated)",
+    Default = C.Aimbot.CustomTargets.Presets.Head,
+    Callback = function(v)
+        C.Aimbot.CustomTargets.Presets.Head = v or ""
+    end,
+})
+
+CustomTargetsSection:Input({
+    Title = "Body (comma-separated)",
+    Default = C.Aimbot.CustomTargets.Presets.Body,
+    Callback = function(v)
+        C.Aimbot.CustomTargets.Presets.Body = v or ""
+    end,
+})
+
+CustomTargetsSection:Input({
+    Title = "Arms (comma-separated)",
+    Default = C.Aimbot.CustomTargets.Presets.Arms,
+    Callback = function(v)
+        C.Aimbot.CustomTargets.Presets.Arms = v or ""
+    end,
+})
+
+CustomTargetsSection:Input({
+    Title = "Legs (comma-separated)",
+    Default = C.Aimbot.CustomTargets.Presets.Legs,
+    Callback = function(v)
+        C.Aimbot.CustomTargets.Presets.Legs = v or ""
+    end,
+})
+
+CustomTargetsSection:Button({
+    Title = "Add Custom Target",
+    Callback = function()
+        table.insert(C.Aimbot.CustomTargets.Custom, "")
+        WindUI:Notify({ Title = "Custom Target Added", Content = "Edit the new entry in the list below." })
     end,
 })
 
@@ -1216,7 +1696,7 @@ end
 function Utils.WallCheck(origin, destination, ignoreList)
     local params = RaycastParams.new()
     params.FilterType = Enum.RaycastFilterType.Exclude
-    params.FilterDescendantsInstances = ignoreList
+    params.FilterDescendantsInstances = ignoreList or { LocalPlayer.Character }
     params.IgnoreWater = true
     local ray = Workspace:Raycast(origin, destination - origin, params)
     return ray == nil
@@ -1276,6 +1756,13 @@ function Utils.GetDynamicFOV()
 end
 
 function Utils.GetTargetPart(character, targetName)
+    if C.Aimbot.CustomTargets.Enabled and C.Aimbot.CustomTargets.Mode == "Replace" then
+        local customParts = Utils.GetCustomTargetParts(character)
+        if customParts and #customParts > 0 then
+            return customParts[1]
+        end
+    end
+    
     local isR15 = character:FindFirstChild("UpperTorso") ~= nil
 
     if targetName == "Head" then
@@ -1300,6 +1787,274 @@ function Utils.PredictPosition(part, velocity, distance)
     local timeToHit = distance * C.Aimbot.Prediction.VelocityCompensation
     local drop = Vector3.new(0, C.Aimbot.Prediction.BulletDrop * (timeToHit ^ 2), 0)
     return part.Position + (velocity * timeToHit) + drop
+end
+
+function Utils.IsPenetrable(part)
+    local settings = C.Aimbot.AdvancedWallCheck.PenetrableCheck
+    
+    if not settings.Enabled then
+        return false
+    end
+    
+    if settings.CheckTransparency and part.Transparency >= settings.TransparencyThreshold then
+        return true
+    end
+    
+    if settings.CheckCanCollide and not part.CanCollide then
+        return true
+    end
+    
+    return false
+end
+
+function Utils.CheckPartVisibility(part, targetCharacter)
+    if not part then return false end
+    
+    if C.Aimbot.AdvancedWallCheck.LowEndMode then
+        return true
+    end
+    
+    local params = RaycastParams.new()
+    params.FilterType = Enum.RaycastFilterType.Exclude
+    params.FilterDescendantsInstances = { LocalPlayer.Character }
+    
+    local direction = (part.Position - Camera.CFrame.Position)
+    local hit = Workspace:Raycast(Camera.CFrame.Position, direction, params)
+    
+    if hit and hit.Instance then
+        local hitModel = hit.Instance:FindFirstAncestorOfClass("Model")
+        local hitChar = hitModel and Players:GetPlayerFromCharacter(hitModel)
+        
+        if hitChar and hitChar.Character == targetCharacter then
+            return true
+        end
+        
+        if Utils.IsPenetrable(hit.Instance) then
+            return true
+        end
+    end
+    
+    return false
+end
+
+function Utils.MultiPointVisibilityCheck(targetCharacter)
+    local settings = C.Aimbot.AdvancedWallCheck.MultiPointCheck
+    
+    if not settings.Enabled then
+        return true
+    end
+    
+    if C.Aimbot.AdvancedWallCheck.LowEndMode then
+        return true
+    end
+    
+    for _, partName in ipairs(settings.CheckPoints) do
+        local part = targetCharacter:FindFirstChild(partName)
+        if part and Utils.CheckPartVisibility(part, targetCharacter) then
+            if settings.RequireAny then
+                return true
+            end
+        end
+    end
+    
+    return false
+end
+
+function Utils.CountVisibleParts(targetCharacter)
+    local settings = C.Aimbot.AdvancedWallCheck.VisiblePartsCount
+    
+    if not settings.Enabled then
+        return { count = 999, percentage = 100, essentialVisible = true }
+    end
+    
+    if C.Aimbot.AdvancedWallCheck.LowEndMode then
+        return { count = 999, percentage = 100, essentialVisible = true }
+    end
+    
+    local isR15 = targetCharacter:FindFirstChild("UpperTorso") ~= nil
+    local allParts = isR15 and {
+        "Head", "UpperTorso", "LowerTorso",
+        "LeftUpperArm", "RightUpperArm",
+        "LeftUpperLeg", "RightUpperLeg",
+    } or {
+        "Head", "Torso",
+        "Left Arm", "Right Arm",
+        "Left Leg", "Right Leg",
+    }
+    
+    local visibleCount = 0
+    local essentialVisible = false
+    
+    for _, partName in ipairs(allParts) do
+        local part = targetCharacter:FindFirstChild(partName)
+        if part then
+            if Utils.CheckPartVisibility(part, targetCharacter) then
+                visibleCount = visibleCount + 1
+                
+                if table.find(settings.EssentialParts, partName) then
+                    essentialVisible = true
+                end
+            end
+        end
+    end
+    
+    local percentage = (visibleCount / #allParts) * 100
+    
+    return {
+        count = visibleCount,
+        percentage = percentage,
+        essentialVisible = essentialVisible,
+        total = #allParts,
+    }
+end
+
+function Utils.IsCharacterVisible(character)
+    if not C.Aimbot.AdvancedWallCheck.Enabled then
+        return Utils.WallCheck(Camera.CFrame.Position, character:FindFirstChild("HumanoidRootPart").Position, { LocalPlayer.Character, character })
+    end
+    
+    if C.Aimbot.AdvancedWallCheck.LowEndMode then
+        return true
+    end
+    
+    if not Utils.MultiPointVisibilityCheck(character) then
+        return false
+    end
+    
+    local visResult = Utils.CountVisibleParts(character)
+    local countSettings = C.Aimbot.AdvancedWallCheck.VisiblePartsCount
+    
+    if visResult.count < countSettings.MinVisibleParts then
+        return false
+    end
+    
+    if visResult.percentage < countSettings.MinVisibilityPercentage then
+        return false
+    end
+    
+    if countSettings.RequireEssential and not visResult.essentialVisible then
+        return false
+    end
+    
+    return true
+end
+
+function Utils.ParseMultiPath(pathString)
+    if not pathString or pathString == "" then
+        return {}
+    end
+    
+    local paths = {}
+    for path in string.gmatch(pathString, "[^,]+") do
+        path = path:match("^%s*(.-)%s*$")
+        if path and path ~= "" then
+            table.insert(paths, path)
+        end
+    end
+    
+    return paths
+end
+
+function Utils.ResolveTargetPath(character, path)
+    if not character or not path or path == "" then
+        return nil
+    end
+    
+    local current = character
+    local startIdx = 1
+    
+    if path:sub(1, 10):lower() == "character." then
+        startIdx = 11
+    end
+    
+    local remaining = path:sub(startIdx)
+    
+    for partName in string.gmatch(remaining, "[^.]+") do
+        partName = partName:match("^%s*(.-)%s*$")
+        if partName and partName ~= "" then
+            if current then
+                if typeof(current) == "Instance" then
+                    current = current:FindFirstChild(partName)
+                else
+                    return nil
+                end
+            end
+        end
+    end
+    
+    if current and current:IsA("BasePart") then
+        return current
+    end
+    
+    return nil
+end
+
+function Utils.GetCustomTargetParts(character)
+    if not C.Aimbot.CustomTargets.Enabled then
+        return nil
+    end
+    
+    local parts = {}
+    local customConfig = C.Aimbot.CustomTargets
+    
+    for presetName, pathString in pairs(customConfig.Presets) do
+        if pathString and pathString ~= "" then
+            local paths = Utils.ParseMultiPath(pathString)
+            for _, path in ipairs(paths) do
+                local part = Utils.ResolveTargetPath(character, path)
+                if part then
+                    table.insert(parts, part)
+                end
+            end
+        end
+    end
+    
+    for _, pathString in ipairs(customConfig.Custom) do
+        if pathString and pathString ~= "" then
+            local paths = Utils.ParseMultiPath(pathString)
+            for _, path in ipairs(paths) do
+                local part = Utils.ResolveTargetPath(character, path)
+                if part then
+                    table.insert(parts, part)
+                end
+            end
+        end
+    end
+    
+    return parts
+end
+
+function Utils.GetPatternOffsets(pattern, spread, randomCount)
+    local s = spread
+    local patterns = {
+        Single = { {0, 0} },
+        Cross = {
+            {0, 0},
+            {0, -s}, {0, s},
+            {-s, 0}, {s, 0},
+        },
+        Grid = {
+            {-s, -s}, {0, -s}, {s, -s},
+            {-s,  0}, {0,  0}, {s,  0},
+            {-s,  s}, {0,  s}, {s,  s},
+        },
+    }
+    
+    if pattern == "Random" then
+        local offsets = { {0, 0} }
+        local count = randomCount or 4
+        for i = 1, count do
+            local angle = math.random() * math.pi * 2
+            local radius = math.random() * s
+            table.insert(offsets, {
+                math.cos(angle) * radius,
+                math.sin(angle) * radius
+            })
+        end
+        return offsets
+    end
+    
+    return patterns[pattern] or patterns.Single
 end
 
 function Utils.Get3DBoxCorners(character)
@@ -1409,19 +2164,23 @@ table.insert(getgenv().UniversalAimbotESPConnections, UserInputService.InputBega
     if processed then
         return
     end
+    
+    -- Aimbot keybind
     if input.UserInputType == C.Aimbot.Keybind or input.KeyCode == C.Aimbot.Keybind then
         Aiming = true
     end
+    
+    -- Triggerbot keybind
     if input.UserInputType == C.Aimbot.Triggerbot.Keybind or input.KeyCode == C.Aimbot.Triggerbot.Keybind then
-        print("Triggerbot key pressed:", tostring(input.UserInputType), "==", tostring(C.Aimbot.Triggerbot.Keybind))
         if C.Aimbot.Triggerbot.KeybindMode == "Toggle" then
             TriggerbotToggled = not TriggerbotToggled
-            print("Triggerbot toggled:", TriggerbotToggled)
+            WindUI:Notify({ Title = "Triggerbot", Content = TriggerbotToggled and "Enabled" or "Disabled" })
         else
             TriggerbotHeld = true
-            print("Triggerbot held: true")
         end
     end
+    
+    -- ESP Toggle
     if input.KeyCode == C.ESP.ToggleKey then
         C.ESP.Enabled = not C.ESP.Enabled
         WindUI:Notify({ Title = "ESP", Content = C.ESP.Enabled and "Enabled" or "Disabled" })
@@ -1429,14 +2188,15 @@ table.insert(getgenv().UniversalAimbotESPConnections, UserInputService.InputBega
 end))
 
 table.insert(getgenv().UniversalAimbotESPConnections, UserInputService.InputEnded:Connect(function(input)
+    -- Aimbot keybind release
     if input.UserInputType == C.Aimbot.Keybind or input.KeyCode == C.Aimbot.Keybind then
         Aiming = false
     end
+    
+    -- Triggerbot keybind release
     if input.UserInputType == C.Aimbot.Triggerbot.Keybind or input.KeyCode == C.Aimbot.Triggerbot.Keybind then
-        print("Triggerbot key released:", tostring(input.UserInputType))
         if C.Aimbot.Triggerbot.KeybindMode == "Hold" then
             TriggerbotHeld = false
-            print("Triggerbot held: false")
         end
     end
 end))
@@ -1780,7 +2540,11 @@ table.insert(getgenv().UniversalAimbotESPConnections, RunService.RenderStepped:C
                 local rootScreenPos, onScreen = Camera:WorldToViewportPoint(root.Position)
 
                 if C.ESP.WallCheck then
-                    isActuallyVisible = Utils.WallCheck(Camera.CFrame.Position, root.Position, { LocalPlayer.Character, char })
+                    if C.Aimbot.AdvancedWallCheck.Enabled then
+                        isActuallyVisible = Utils.IsCharacterVisible(char)
+                    else
+                        isActuallyVisible = Utils.WallCheck(Camera.CFrame.Position, root.Position, { LocalPlayer.Character, char })
+                    end
                 else
                     isActuallyVisible = true
                 end
@@ -2171,35 +2935,39 @@ table.insert(getgenv().UniversalAimbotESPConnections, RunService.RenderStepped:C
                     if not C.Aimbot.AliveCheck or Utils.IsAlive(char) then
                         local targetPart = Utils.GetTargetPart(char, C.Aimbot.TargetPart) or root
                         if targetPart then
-                        local predictedPos = Utils.PredictPosition(targetPart, targetPart.AssemblyLinearVelocity, distance)
-                        local sPos, onS = Camera:WorldToViewportPoint(predictedPos)
-                        local distToMouse = (Vector2.new(sPos.X, sPos.Y) - aimOrigin).Magnitude
+                            local predictedPos = Utils.PredictPosition(targetPart, targetPart.AssemblyLinearVelocity, distance)
+                            local sPos, onS = Camera:WorldToViewportPoint(predictedPos)
+                            local distToMouse = (Vector2.new(sPos.X, sPos.Y) - aimOrigin).Magnitude
 
-                        if onS and (C.Aimbot.RageMode or distToMouse < currentFovRadius) then
-                            local vis = true
-                            if C.Aimbot.WallCheck and not C.Aimbot.RageMode then
-                                vis = Utils.WallCheck(Camera.CFrame.Position, targetPart.Position, { LocalPlayer.Character, char })
-                            end
-
-                            if vis then
-                                if C.Aimbot.Hitchance >= 100 or math.random(1, 100) <= C.Aimbot.Hitchance then
-                                    local score = distToMouse
-                                    if C.Aimbot.Priority == "Distance" then
-                                        score = distance
-                                    elseif C.Aimbot.Priority == "Lowest HP" then
-                                        score = hum.Health
-                                    elseif C.Aimbot.Priority == "Visible" then
-                                        score = distance
+                            if onS and (C.Aimbot.RageMode or distToMouse < currentFovRadius) then
+                                local vis = true
+                                if C.Aimbot.WallCheck and not C.Aimbot.RageMode then
+                                    if C.Aimbot.AdvancedWallCheck.Enabled then
+                                        vis = Utils.IsCharacterVisible(char)
+                                    else
+                                        vis = Utils.WallCheck(Camera.CFrame.Position, targetPart.Position, { LocalPlayer.Character, char })
                                     end
+                                end
 
-                                    if score < bestScore then
-                                        bestScore = score
-                                        CurrentTarget = targetPart
+                                if vis then
+                                    if C.Aimbot.Hitchance >= 100 or math.random(1, 100) <= C.Aimbot.Hitchance then
+                                        local score = distToMouse
+                                        if C.Aimbot.Priority == "Distance" then
+                                            score = distance
+                                        elseif C.Aimbot.Priority == "Lowest HP" then
+                                            score = hum.Health
+                                        elseif C.Aimbot.Priority == "Visible" then
+                                            score = distance
+                                        end
+
+                                        if score < bestScore then
+                                            bestScore = score
+                                            CurrentTarget = targetPart
+                                        end
                                     end
                                 end
                             end
                         end
-                    end
                     end
                 end
             end
@@ -2272,7 +3040,7 @@ table.insert(getgenv().UniversalAimbotESPConnections, RunService.RenderStepped:C
     -- ==================
     if C.Aimbot.Triggerbot.Enabled then
         local shouldTrigger = false
-        
+
         if C.Aimbot.Triggerbot.RequireKeybind then
             if C.Aimbot.Triggerbot.KeybindMode == "Toggle" then
                 shouldTrigger = TriggerbotToggled
@@ -2282,12 +3050,17 @@ table.insert(getgenv().UniversalAimbotESPConnections, RunService.RenderStepped:C
         else
             shouldTrigger = true
         end
-        
+
         if shouldTrigger then
             if not getgenv().LastTriggerTime or now - getgenv().LastTriggerTime >= C.Aimbot.Triggerbot.Delay then
                 local mouseLoc = UserInputService:GetMouseLocation()
                 local enemyPos = nil
-                
+
+                if C.Aimbot.Enabled and CurrentTarget and CurrentTarget.Parent then
+                    local targetScreenPos = Camera:WorldToViewportPoint(CurrentTarget.Position)
+                    mouseLoc = Vector2.new(targetScreenPos.X, targetScreenPos.Y)
+                end
+
                 local targetCharacters = {}
                 for _, p in ipairs(Players:GetPlayers()) do
                     if p ~= LocalPlayer and p.Character then
@@ -2300,104 +3073,294 @@ table.insert(getgenv().UniversalAimbotESPConnections, RunService.RenderStepped:C
                     end
                 end
 
-                local function CheckHit(mouseX, mouseY)
-                    if #targetCharacters == 0 then return nil end
-                    local ray = Camera:ViewportPointToRay(mouseX, mouseY)
-
-                    -- Step 1: Cari apakah ada pemain di arah kursor (Whitelist)
-                    -- Ini akan "menembus" pagar/jendela/pintu untuk mendeteksi musuh
-                    local includeParams = RaycastParams.new()
-                    includeParams.FilterType = Enum.RaycastFilterType.Include
-                    includeParams.FilterDescendantsInstances = targetCharacters
-                    local playerHit = Workspace:Raycast(ray.Origin, ray.Direction * 1000, includeParams)
-
-                    if playerHit and playerHit.Instance then
-                        -- Jika IgnoreWall aktif, langsung tembak (Rage Mode)
-                        if C.Aimbot.Triggerbot.IgnoreWall then
-                            return playerHit.Position
+                local precision = C.Aimbot.Triggerbot.Precision
+                local targetMode = precision.TargetMode
+                local targetPartSetting = precision.TargetPart
+                local tolerance = precision.Tolerance * precision.ExpansionMultiplier
+                local multiRay = C.Aimbot.Triggerbot.MultiRay
+                
+                local function GetTargetParts(character)
+                    local isR15 = character:FindFirstChild("UpperTorso") ~= nil
+                    local parts = {}
+                    
+                    if C.Aimbot.CustomTargets.Enabled and C.Aimbot.CustomTargets.Mode == "Replace" then
+                        local customParts = Utils.GetCustomTargetParts(character)
+                        if customParts and #customParts > 0 then
+                            return customParts
                         end
-
-                        -- Step 2: Cek apakah ada tembok padat di depannya (Legit Check)
-                        local excludeParams = RaycastParams.new()
-                        excludeParams.FilterType = Enum.RaycastFilterType.Exclude
-                        excludeParams.FilterDescendantsInstances = { LocalPlayer.Character }
-                        local wallHit = Workspace:Raycast(ray.Origin, ray.Direction * 1000, excludeParams)
-
-                        if wallHit and wallHit.Instance then
-                            local hitModel = wallHit.Instance:FindFirstAncestorOfClass("Model")
-                            local hitPlayer = hitModel and Players:GetPlayerFromCharacter(hitModel)
-
-                            -- Jika yang kena Raycast normal adalah pemain, berarti tidak ada tembok penghalang
-                            -- Ini akan bekerja pada celah pagar karena Raycast normal akan mengenai pemain lewat lubang tersebut
-                            if hitPlayer and (not C.Aimbot.Triggerbot.TeamCheck or not Utils.IsTeammate(hitPlayer)) then
-                                return wallHit.Position
+                    end
+                    
+                    if targetPartSetting == "Head" then
+                        table.insert(parts, character:FindFirstChild("Head"))
+                    elseif targetPartSetting == "Body" then
+                        if isR15 then
+                            table.insert(parts, character:FindFirstChild("UpperTorso"))
+                            table.insert(parts, character:FindFirstChild("LowerTorso"))
+                        else
+                            table.insert(parts, character:FindFirstChild("Torso"))
+                        end
+                    elseif targetPartSetting == "Any" then
+                        local allParts = isR15 and {
+                            "Head", "UpperTorso", "LowerTorso",
+                            "LeftUpperArm", "RightUpperArm",
+                            "LeftUpperLeg", "RightUpperLeg",
+                        } or { "Head", "Torso", "Left Arm", "Right Arm", "Left Leg", "Right Leg" }
+                        for _, name in ipairs(allParts) do
+                            local part = character:FindFirstChild(name)
+                            if part then table.insert(parts, part) end
+                        end
+                    elseif targetPartSetting == "Closest" then
+                        local allParts = isR15 and {
+                            "Head", "UpperTorso", "LowerTorso",
+                            "LeftUpperArm", "RightUpperArm",
+                            "LeftUpperLeg", "RightUpperLeg",
+                        } or { "Head", "Torso", "Left Arm", "Right Arm", "Left Leg", "Right Leg" }
+                        local closestPart = nil
+                        local closestDist = math.huge
+                        for _, name in ipairs(allParts) do
+                            local part = character:FindFirstChild(name)
+                            if part then
+                                local screenPos, onScreen = Camera:WorldToViewportPoint(part.Position)
+                                if onScreen then
+                                    local dist = (Vector2.new(screenPos.X, screenPos.Y) - mouseLoc).Magnitude
+                                    if dist < closestDist then
+                                        closestDist = dist
+                                        closestPart = part
+                                    end
+                                end
+                            end
+                        end
+                        if closestPart then table.insert(parts, closestPart) end
+                    end
+                    
+                    if C.Aimbot.CustomTargets.Enabled and C.Aimbot.CustomTargets.Mode == "Append" then
+                        local customParts = Utils.GetCustomTargetParts(character)
+                        if customParts then
+                            for _, part in ipairs(customParts) do
+                                table.insert(parts, part)
                             end
                         end
                     end
+                    
+                    return parts
+                end
+
+                local function CheckHitPrecision(mouseX, mouseY)
+                    if #targetCharacters == 0 then return nil end
+                    
+                    if targetMode == "Loose" then
+                        local ray = Camera:ViewportPointToRay(mouseX, mouseY)
+                        local includeParams = RaycastParams.new()
+                        includeParams.FilterType = Enum.RaycastFilterType.Include
+                        includeParams.FilterDescendantsInstances = targetCharacters
+                        local playerHit = Workspace:Raycast(ray.Origin, ray.Direction * 1000, includeParams)
+
+                        if playerHit and playerHit.Instance then
+                            local hitModel = playerHit.Instance:FindFirstAncestorOfClass("Model")
+                            local targetChar = nil
+                            
+                            for _, char in ipairs(targetCharacters) do
+                                if char == hitModel or hitModel:IsDescendantOf(char) then
+                                    targetChar = char
+                                    break
+                                end
+                            end
+                            
+                            if not targetChar then return nil end
+                            
+                            local hum = targetChar:FindFirstChildOfClass("Humanoid")
+                            if not hum or hum.Health <= 0 then return nil end
+                            
+                            if C.Aimbot.Triggerbot.IgnoreWall then
+                                return playerHit.Position
+                            end
+                            
+                            if C.Aimbot.AdvancedWallCheck.Enabled then
+                                if not Utils.MultiPointVisibilityCheck(targetChar) then return nil end
+                                local visResult = Utils.CountVisibleParts(targetChar)
+                                local countSettings = C.Aimbot.AdvancedWallCheck.VisiblePartsCount
+                                if visResult.count < countSettings.MinVisibleParts then return nil end
+                                if visResult.percentage < countSettings.MinVisibilityPercentage then return nil end
+                                if countSettings.RequireEssential and not visResult.essentialVisible then return nil end
+                            end
+
+                            local excludeParams = RaycastParams.new()
+                            excludeParams.FilterType = Enum.RaycastFilterType.Exclude
+                            excludeParams.FilterDescendantsInstances = { LocalPlayer.Character }
+                            local wallHit = Workspace:Raycast(ray.Origin, ray.Direction * 1000, excludeParams)
+
+                            if wallHit and wallHit.Instance then
+                                if Utils.IsPenetrable(wallHit.Instance) then
+                                    return playerHit.Position
+                                end
+                                local wallModel = wallHit.Instance:FindFirstAncestorOfClass("Model")
+                                local hitPlayer = wallModel and Players:GetPlayerFromCharacter(wallModel)
+                                if hitPlayer then return wallHit.Position end
+                                return nil
+                            end
+                            
+                            return playerHit.Position
+                        end
+                        return nil
+                    end
+                    
+                    local function CheckWallBetween(targetPart, targetChar)
+                        if C.Aimbot.Triggerbot.IgnoreWall then return true end
+                        
+                        if C.Aimbot.AdvancedWallCheck.Enabled then
+                            return Utils.CheckPartVisibility(targetPart, targetChar)
+                        else
+                            local rayDir = (targetPart.Position - Camera.CFrame.Position)
+                            local excludeParams = RaycastParams.new()
+                            excludeParams.FilterType = Enum.RaycastFilterType.Exclude
+                            excludeParams.FilterDescendantsInstances = { LocalPlayer.Character }
+                            local wallHit = Workspace:Raycast(Camera.CFrame.Position, rayDir, excludeParams)
+                            if wallHit and wallHit.Instance then
+                                if not Utils.IsPenetrable(wallHit.Instance) then
+                                    local wallModel = wallHit.Instance:FindFirstAncestorOfClass("Model")
+                                    local wallPlayer = wallModel and Players:GetPlayerFromCharacter(wallModel)
+                                    if not wallPlayer then return false end
+                                end
+                            end
+                            return true
+                        end
+                    end
+                    
+                    for _, targetChar in ipairs(targetCharacters) do
+                        local hum = targetChar:FindFirstChildOfClass("Humanoid")
+                        if hum and hum.Health > 0 then
+                            local targetParts = GetTargetParts(targetChar)
+                            
+                            for _, targetPart in ipairs(targetParts) do
+                                if targetPart then
+                                    local screenPos, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
+                                    if onScreen then
+                                        local partScreenPos = Vector2.new(screenPos.X, screenPos.Y)
+                                        local distanceToCursor = (partScreenPos - Vector2.new(mouseX, mouseY)).Magnitude
+                                        
+                                        if distanceToCursor > tolerance then
+                                            continue
+                                        end
+                                        
+                                        if targetMode == "Strict" then
+                                            local ray = Camera:ViewportPointToRay(mouseX, mouseY)
+                                            local includeParams = RaycastParams.new()
+                                            includeParams.FilterType = Enum.RaycastFilterType.Include
+                                            includeParams.FilterDescendantsInstances = { targetChar }
+                                            local hit = Workspace:Raycast(ray.Origin, ray.Direction * 1000, includeParams)
+                                            
+                                            if hit and hit.Instance then
+                                                local hitPart = hit.Instance
+                                                if hitPart == targetPart or hitPart:IsDescendantOf(targetChar) then
+                                                    if CheckWallBetween(targetPart, targetChar) then
+                                                        return hit.Position
+                                                    end
+                                                end
+                                            end
+                                            
+                                        elseif targetMode == "Forgiving" then
+                                            if CheckWallBetween(targetPart, targetChar) then
+                                                return targetPart.Position
+                                            end
+                                        end
+                                    end
+                                end
+                            end
+                        end
+                    end
+                    
                     return nil
                 end
-                
-                if C.Aimbot.Triggerbot.MultiRay then
-                    local spread = C.Aimbot.Triggerbot.RaySpread or 3
-                    local offsets = {
-                        Vector2.new(0, 0),
-                        Vector2.new(-spread, 0),
-                        Vector2.new(spread, 0),
-                        Vector2.new(0, -spread),
-                        Vector2.new(0, spread),
-                        Vector2.new(-spread, -spread),
-                        Vector2.new(spread, -spread),
-                        Vector2.new(-spread, spread),
-                        Vector2.new(spread, spread),
-                    }
-                    
+
+                if multiRay.Enabled then
+                    local offsets = Utils.GetPatternOffsets(multiRay.Pattern, multiRay.Spread, multiRay.RandomCount)
                     for _, offset in ipairs(offsets) do
-                        local testPos = mouseLoc + offset
-                        local result = CheckHit(testPos.X, testPos.Y)
-                        if result then
-                            enemyPos = result
-                            mouseLoc = testPos
+                        local rayX = mouseLoc.X + offset[1]
+                        local rayY = mouseLoc.Y + offset[2]
+                        enemyPos = CheckHitPrecision(rayX, rayY)
+                        if enemyPos then
                             break
                         end
                     end
                 else
-                    enemyPos = CheckHit(mouseLoc.X, mouseLoc.Y)
+                    enemyPos = CheckHitPrecision(mouseLoc.X, mouseLoc.Y)
                 end
-                
+
                 if enemyPos then
-                    getgenv().LastTriggerTime = now
-                    task.spawn(function()
+                    local delayRand = C.Aimbot.Triggerbot.DelayRandomization
+                    local actualDelay = C.Aimbot.Triggerbot.Delay
+                    if delayRand > 0 then
+                        actualDelay = actualDelay + (math.random() * 2 - 1) * delayRand
+                    end
+                    
+                    if not getgenv().LastTriggerTime or now - getgenv().LastTriggerTime >= actualDelay then
+                        getgenv().LastTriggerTime = now
+                        task.spawn(function()
                         local method = C.Aimbot.Triggerbot.SpoofMethod
-                        
-                        if method == "firesignal" then
-                            local InputObject = Instance.new("InputObject")
-                            InputObject.KeyCode = Enum.KeyCode.Unknown
-                            InputObject.UserInputType = Enum.UserInputType.MouseButton1
-                            InputObject.UserInputState = Enum.UserInputState.Begin
-                            InputObject.Position = Vector3.new(mouseLoc.X, mouseLoc.Y, 0)
-                            firesignal(UserInputService.InputBegan, InputObject, false)
-                            task.wait(0.08)
-                            InputObject.UserInputState = Enum.UserInputState.End
-                            firesignal(UserInputService.InputEnded, InputObject, false)
-                            
-                        elseif method == "VirtualInputManager" then
-                            VirtualInputManager:SendMouseButtonEvent(mouseLoc.X, mouseLoc.Y, 0, true, nil, 1)
-                            task.wait(0.08)
-                            VirtualInputManager:SendMouseButtonEvent(mouseLoc.X, mouseLoc.Y, 0, false, nil, 1)
-                            
-                        elseif method == "mouse1click" and mouse1click then
-                            mouse1click()
-                            
-                        else
-                            if mouse1click then
+
+                        -- Try multiple firing methods for better compatibility
+                        local function FireMouse()
+                            -- Method 1: Direct mouse functions (most reliable for executors)
+                            if mouse1press and mouse1release then
+                                mouse1press()
+                                task.wait(0.05)
+                                mouse1release()
+                                return true
+                            elseif mouse1click then
                                 mouse1click()
-                            else
+                                return true
+                            end
+                            return false
+                        end
+
+                        local function FireVirtualInput()
+                            if VirtualInputManager then
                                 VirtualInputManager:SendMouseButtonEvent(mouseLoc.X, mouseLoc.Y, 0, true, game, 0)
                                 task.wait(0.05)
                                 VirtualInputManager:SendMouseButtonEvent(mouseLoc.X, mouseLoc.Y, 0, false, game, 0)
+                                return true
+                            end
+                            return false
+                        end
+
+                        local function FireFireSignal()
+                            if firesignal then
+                                local InputObject = Instance.new("InputObject")
+                                InputObject.UserInputType = Enum.UserInputType.MouseButton1
+                                InputObject.UserInputState = Enum.UserInputState.Begin
+                                InputObject.Position = Vector3.new(mouseLoc.X, mouseLoc.Y, 0)
+                                firesignal(UserInputService.InputBegan, InputObject, false)
+                                task.wait(0.05)
+                                InputObject.UserInputState = Enum.UserInputState.End
+                                firesignal(UserInputService.InputEnded, InputObject, false)
+                                return true
+                            end
+                            return false
+                        end
+
+                        -- Execute based on selected method with fallbacks
+                        if method == "mouse1click" then
+                            if not FireMouse() then
+                                FireVirtualInput()
+                            end
+                        elseif method == "VirtualInputManager" then
+                            if not FireVirtualInput() then
+                                FireMouse()
+                            end
+                        elseif method == "firesignal" then
+                            if not FireFireSignal() then
+                                FireMouse()
+                            end
+                        else
+                            -- Default: try all methods
+                            if not FireMouse() then
+                                if not FireVirtualInput() then
+                                    FireFireSignal()
+                                end
                             end
                         end
-                    end)
+                        end)
+                    end
                 end
             end
         end
